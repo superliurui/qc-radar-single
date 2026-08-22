@@ -25,19 +25,34 @@ license: MIT
 1. 质控数据 CSV：含列 `科室` 及指标列，如 `出院人次,门（急）诊人次,医疗服务收入占比,...,DDDs,(48小时)再入院例数,...,医疗不良事件上报数,督查扣分,临床路径入径率`。数值空为"-"或空。
 2. DDD 目标值 CSV：列 `科室,DDD目标值`。科室名会自动做规范化匹配（去除括号及空格）。
 
+### 数据放置（推荐）
+脚本默认在**脚本所在目录的 `data/` 子目录**中读取数据并输出结果，路径全部相对脚本位置，方便随技能整体携带：
+
+```
+qc-radar-single/
+  gen_qc_reports.py
+  SKILL.md
+  data/
+    质控数据提取结果.csv
+    ddds目标值.csv
+    科室单报表/        ← 输出
+    科室质控报表.zip   ← 输出
+```
+
 ### 运行
 
+直接运行（使用 `data/` 默认路径）：
 ```bash
-uv run python scripts/qc-radar-single/gen_qc_reports.py \
+uv run python skills/qc-radar-single/gen_qc_reports.py
+```
+
+或自定义路径：
+```bash
+uv run python skills/qc-radar-single/gen_qc_reports.py \
   --data "Z:\...\质控数据提取结果.csv" \
   --ddds "Z:\...\ddds目标值.csv" \
   --out "Z:\...\科室单报表" \
   --zip "Z:\...\科室质控报表_7月.zip"
-```
-
-也可直接修改脚本顶部的常量路径后运行：
-```bash
-uv run python scripts/qc-radar-single/gen_qc_reports.py
 ```
 
 ### 依赖
