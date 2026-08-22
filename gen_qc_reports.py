@@ -20,11 +20,14 @@ sys.stdout.reconfigure(encoding='utf-8')
 plt.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'SimSun']
 plt.rcParams['axes.unicode_minus'] = False
 
+_HERE = Path(__file__).resolve().parent
+_DATA_DIR = _HERE / "data"  # 默认数据目录（相对脚本位置）
+
 _ap = argparse.ArgumentParser(description="分科室质量控制报表生成器")
-_ap.add_argument("--data", default=r"Z:\医务科工作\openclaw\质控\7月\check\质控数据提取结果.csv")
-_ap.add_argument("--ddds", default=r"Z:\医务科工作\openclaw\质控\7月\ddds目标值.csv")
-_ap.add_argument("--out", default=r"Z:\医务科工作\openclaw\质控\7月\科室单报表")
-_ap.add_argument("--zip", default=r"Z:\医务科工作\openclaw\质控\7月\科室质控报表_7月.zip")
+_ap.add_argument("--data", default=str(_DATA_DIR / "质控数据提取结果.csv"))
+_ap.add_argument("--ddds", default=str(_DATA_DIR / "ddds目标值.csv"))
+_ap.add_argument("--out", default=str(_DATA_DIR / "科室单报表"))
+_ap.add_argument("--zip", default=str(_DATA_DIR / "科室质控报表.zip"))
 _a = _ap.parse_args()
 
 BASE = Path(_a.out).parent
@@ -35,6 +38,10 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 ZIP_PATH = Path(_a.zip)
 RADAR_DIR = OUT_DIR / "radar"
 RADAR_DIR.mkdir(parents=True, exist_ok=True)
+
+for _p in (DATA_CSV, DDDS_TARGET_CSV):
+    if not _p.exists():
+        sys.exit(f"错误：找不到数据文件 {_p}。请用 --data/--ddds 指定路径，或将数据放入 {_DATA_DIR}。")
 
 CLR_TITLE = RGBColor(0x1F, 0x3A, 0x5F)
 CLR_HEADER_BG = "1F3A5F"
