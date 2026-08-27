@@ -17,9 +17,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 sys.stdout.reconfigure(encoding='utf-8')
-# macOS 系统字体：STHeiti (华文黑体) 替代 SimHei
-plt.rcParams['font.sans-serif'] = ['STHeiti', 'SimHei', 'Microsoft YaHei', 'SimSun', 'Arial Unicode MS']
+# 字体配置（Windows 优先 Microsoft YaHei）
+plt.rcParams['font.sans-serif'] = ['Microsoft YaHei', 'SimHei', 'STHeiti', 'SimSun', 'Arial Unicode MS']
 plt.rcParams['axes.unicode_minus'] = False
+from matplotlib.font_manager import FontProperties
+_SYSTEM_FONT = FontProperties(family='Microsoft YaHei')
 
 _HERE = Path(__file__).resolve().parent
 _DATA_DIR = _HERE / "data"  # 默认数据目录（相对脚本位置）
@@ -27,6 +29,7 @@ _DATA_DIR = _HERE / "data"  # 默认数据目录（相对脚本位置）
 _ap = argparse.ArgumentParser(description="分科室质量控制报表生成器")
 _ap.add_argument("--data", default=str(_DATA_DIR / "质控数据提取结果.csv"))
 _ap.add_argument("--ddds", default=str(_DATA_DIR / "ddds目标值.csv"))
+_ap.add_argument("--prev", default="", help="上月质控数据 CSV（可选）")
 _ap.add_argument("--out", default=str(_DATA_DIR / "科室单报表"))
 _ap.add_argument("--zip", default=str(_DATA_DIR / "科室质控报表.zip"))
 _a = _ap.parse_args()
@@ -51,6 +54,7 @@ CLR_RED = RGBColor(0xE5, 0x39, 0x35)
 CLR_GREEN = RGBColor(0x00, 0xB0, 0x50)
 CLR_BLUE = RGBColor(0x1F, 0x75, 0xFE)
 CLR_ORANGE = RGBColor(0xFF, 0x99, 0x33)
+CLR_GRAY = RGBColor(0x99, 0x99, 0x99)
 QUARTILE_COLOR = {"A": CLR_GREEN, "B": CLR_BLUE, "C": CLR_ORANGE, "D": CLR_RED}
 QUARTILE_RADAR_COLOR = {"A": "#00B050", "B": "#1F75FE", "C": "#FF9933", "D": "#E53935"}
 
@@ -69,6 +73,15 @@ GROUPS = {
     ],
 }
 ALL_METRICS = [m for g in GROUPS.values() for m in g]
+
+# 科室名称别名（上月→本月映射）
+DEPT_ALIASES = {
+    'ICU': '重症医学科',
+    '康复科': '康复医学科',
+    '整形外科': '烧伤整形科',
+    '精神心理科': '临床心理科',
+    '烧伤整形科': '烧伤科',
+}
 
 POSITIVE = {
     "出院人次", "门（急）诊人次", "CMI值", "床位使用率", "医疗服务收入占比",
@@ -123,6 +136,29 @@ def fmt_val(metric, v):
         return f"{v:.2f}" if v != int(v) else str(int(v))
     return str(v)
 
+
+def fmt_change(metric, cur_val, prev_val):
+    if cur_val is None or prev_val is None or prev_val == 0:
+        return ('\u2014', CLR_GRAY)
+    pct = (cur_val - prev_val) / prev_val * 100
+    sign = '+' if pct >= 0 else ''
+    label = f"{sign}{pct:.1f}%"
+    if metric in SPECIAL_METRICS or metric in NO_RANK_METRICS:
+        return (label, CLR_GRAY)
+    is_good = (pct >= 0 and metric in POSITIVE) or (pct < 0 and metric in NEGATIVE)
+    return (label, CLR_GREEN if is_good else CLR_RED)
+
+# ---------- 上月数据（可选） ----------
+PREV_CSV = Path(_a.prev) if _a.prev else None
+PREV_DATA = {}
+HAS_PREV = False
+if PREV_CSV and PREV_CSV.exists():
+    with open(PREV_CSV, encoding='utf-8-sig') as _fp:
+        _prev_hdrs = csv.DictReader(_fp).fieldnames or []
+        for _row in csv.DictReader(open(PREV_CSV, encoding='utf-8-sig')):
+            _dept_alias = DEPT_ALIASES.get(_row['科室'], _row['科室'])
+            PREV_DATA[norm_key(_dept_alias)] = {h: parse_val(_row.get(h, '')) for h in _prev_hdrs if h != '科室'}
+    HAS_PREV = True
 
 # ---------- 读取 ----------
 ddds_targets = {}
@@ -260,20 +296,20 @@ def draw_radar(dept_rec, group_name, metrics, out_path):
                     fontweight='bold', color=QUARTILE_RADAR_COLOR[qi],
                     bbox=dict(boxstyle='circle,pad=0.15', facecolor='white',
                               edgecolor=QUARTILE_RADAR_COLOR[qi], linewidth=0.8), zorder=5)
-        ax.text(angle, 1.25, m, ha='center', va='center', fontsize=7, fontproperties='STHeiti',
+        ax.text(angle, 1.25, m, ha='center', va='center', fontsize=7, fontproperties=_SYSTEM_FONT,
                 color='#333333', bbox=dict(boxstyle='round,pad=0.15', facecolor='#FFFFF0',
                                            edgecolor='#CCCCCC', linewidth=0.5), zorder=5)
     ax.set_xticks(angles[:-1])
     ax.set_xticklabels([''] * len(filt))
     ax.set_yticks([0.25, 0.5, 0.75, 1.0])
-    ax.set_yticklabels(['D', 'C', 'B', 'A'], fontsize=8, fontweight='bold', fontproperties='STHeiti')
+    ax.set_yticklabels(['D', 'C', 'B', 'A'], fontsize=8, fontweight='bold', fontproperties=_SYSTEM_FONT)
     for tl, col in zip(ax.get_yticklabels(),
                        [QUARTILE_RADAR_COLOR['D'], QUARTILE_RADAR_COLOR['C'],
                         QUARTILE_RADAR_COLOR['B'], QUARTILE_RADAR_COLOR['A']]):
         tl.set_color(col)
     ax.set_ylim(0, 1.6)
     ax.set_title(f"{dept_rec['科室']} — {group_name}", fontsize=11, fontweight='bold',
-                 pad=20, color='#1F3A5F', fontproperties='STHeiti')
+                 pad=20, color='#1F3A5F', fontproperties=_SYSTEM_FONT)
     plt.tight_layout(pad=1.0)
     fig.savefig(out_path, dpi=200, bbox_inches='tight', facecolor='white')
     plt.close(fig)
@@ -339,8 +375,10 @@ def make_report(rec):
     run.font.size = Pt(8); run.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
     run.font.name = "微软雅黑"; run._element.rPr.rFonts.set(qn('w:eastAsia'), '微软雅黑')
 
-    # 数据表
-    table = doc.add_table(rows=1, cols=3)
+    prev_dept = PREV_DATA.get(norm_key(dept), {})
+
+    # 数据表（5列：指标名称 | 本月 | 上月 | 增减 | 评级）
+    table = doc.add_table(rows=1, cols=5)
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
     table.style = 'Normal Table'
     tblPr = table._tbl.tblPr
@@ -357,26 +395,34 @@ def make_report(rec):
     tblPr.append(borders)
 
     hdr = table.rows[0].cells
-    for i, txt in enumerate(["指标名称", "数值", "评级"]):
+    for i, txt in enumerate(["指标名称", "本月", "上月", "增减", "评级"]):
         hdr[i].text = txt
         set_cell_font(hdr[i], size=10, bold=True, color=RGBColor(0xFF, 0xFF, 0xFF))
         shade(hdr[i], CLR_HEADER_BG)
-    set_col_width(hdr[0], 5000); set_col_width(hdr[1], 2500); set_col_width(hdr[2], 1500)
+    set_col_width(hdr[0], 4200); set_col_width(hdr[1], 1700)
+    set_col_width(hdr[2], 1700); set_col_width(hdr[3], 1800); set_col_width(hdr[4], 1400)
 
     for metric in ALL_METRICS:
         ri = rec["_rank"].get(metric, {})
         v = rec[metric]
         q = ri.get("quartile")
         dad = ri.get("dadab")
+        prev_v = prev_dept.get(metric)
         cells = table.add_row().cells
         cells[0].text = metric
         set_cell_font(cells[0], size=9, align=WD_ALIGN_PARAGRAPH.LEFT)
         cells[1].text = fmt_val(metric, v)
         set_cell_font(cells[1], size=9)
-        set_col_width(cells[0], 5000); set_col_width(cells[1], 2500); set_col_width(cells[2], 1500)
+        cells[2].text = fmt_val(metric, prev_v)
+        set_cell_font(cells[2], size=9, color=CLR_GRAY)
+        chg_label, chg_color = fmt_change(metric, v, prev_v)
+        cells[3].text = chg_label
+        set_cell_font(cells[3], size=9, color=chg_color)
+        set_col_width(cells[0], 4200); set_col_width(cells[1], 1700)
+        set_col_width(cells[2], 1700); set_col_width(cells[3], 1800); set_col_width(cells[4], 1400)
         if metric in SPECIAL_METRICS and dad is not None:
             label = "达标" if dad else "不达标"
-            p = cells[2].paragraphs[0]
+            p = cells[4].paragraphs[0]
             for r in list(p.runs):
                 r._element.getparent().remove(r._element)
             nr = p.add_run(label)
@@ -384,7 +430,7 @@ def make_report(rec):
             nr.font.color.rgb = CLR_GREEN if dad else CLR_RED
             nr.font.name = "微软雅黑"
         elif q:
-            p = cells[2].paragraphs[0]
+            p = cells[4].paragraphs[0]
             for r in list(p.runs):
                 r._element.getparent().remove(r._element)
             nr = p.add_run(q)

@@ -64,10 +64,13 @@ uv run python skills/qc-radar-single/gen_qc_reports.py
 ```bash
 uv run python skills/qc-radar-single/gen_qc_reports.py \
   --data "Z:\...\质控数据提取结果.csv" \
+  --prev "Z:\...\上月质控数据提取结果.csv" \
   --ddds "Z:\...\ddds目标值.csv" \
   --out "Z:\...\科室单报表" \
   --zip "Z:\...\科室质控报表_7月.zip"
 ```
+
+> `--prev` 为可选参数，传入上月 CSV 后表格将新增「上月」「增减」两列，自动计算环比变化百分比，绿色表示向好，红色表示向差。
 
 ### 依赖
 - python-docx、matplotlib、numpy（uv 环境）
