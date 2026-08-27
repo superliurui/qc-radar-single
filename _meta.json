@@ -1,0 +1,9 @@
+{
+  "name": "qc-radar-single",
+  "version": "1.0.0",
+  "description": "为医院质控数据按科室生成独立Word报表（含雷达图）并打包ZIP",
+  "author": "Deep",
+  "license": "MIT",
+  "entry": "gen_qc_reports.py",
+  "dependencies": ["python-docx", "matplotlib", "numpy"]
+}
